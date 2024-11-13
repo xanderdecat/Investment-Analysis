@@ -1,0 +1,312 @@
+---
+title: "Solution Exercise 2"
+output:
+  pdf_document: default
+  html_document: default
+date: "2024-11-12"
+---
+# Exercise 2
+
+On Ufora, you will find monthly price data for the period December 2009 – August 2024
+for two asset classes, each represented by an Exchange-Traded Fund (ETF):
+- US Equity
+- US Government Bonds
+Cash (risk-free) offers a monthly rate of 0.17%.
+
+## Question 2.1: Optimal Risky Portfolio (Mean-Variance Strategy)
+Q = Find the optimal risky portfolio for these asset classes using a mean-variance strategy by maximizing the Sharpe ratio. Report the optimal weights and the Sharpe ratio. Additionally, find the overall optimum capital allocation between the risky portfolio and the risk-free asset for an investor with a quadratic utility function and a risk aversion parameter of 10. Display the allocation in a pie chart. [Use the formula provided in the real-world example in the lecture slides.]
+
+--> In this part, we need to:
+
+1. Calculate the optimal weights for US Equity and US Government Bonds using the Sharpe ratio.
+2. Find the optimal capital allocation between the risky portfolio and the risk-free asset for an investor with a quadratic utility function and a risk aversion parameter of 10.
+3. Display the allocation in a pie chart.
+
+### Step 0: Load and Calculate Monthly Returns
+
+First, load the data and calculate the monthly returns for each asset.
+
+```{r}
+# Load necessary libraries
+library(readxl)
+library(dplyr)
+library(ggplot2)
+
+# Load the original dataset
+original_data <- read_excel("/Users/xanderdecat/Documents/Ghent University/05 UGent 2e Master HIR/Investment Analysis/Data exercise 2.xlsx")
+
+# Create a copy of the original dataset for analysis
+analysis_data <- original_data %>%
+  mutate(
+    Equity_Return = (SPY - lag(SPY, 1)) / lag(SPY, 1),
+    Bond_Return = (SPTI - lag(SPTI, 1)) / lag(SPTI, 1),
+    Gold_Return = (IAU - lag(IAU, 1)) / lag(IAU, 1)
+  ) %>%
+  na.omit() # remove rows with NA values created by lag
+```
+
+### Step 1: Calculate Mean, Variance, and Covariance of Returns
+
+```{r}
+# Calculate mean returns for each asset
+mean_equity <- mean(analysis_data$Equity_Return)
+mean_bond <- mean(analysis_data$Bond_Return)
+
+# Calculate variances and covariance
+var_equity <- var(analysis_data$Equity_Return)
+var_bond <- var(analysis_data$Bond_Return)
+cov_equity_bond <- cov(analysis_data$Equity_Return, analysis_data$Bond_Return)
+
+# Display all results together
+cat(sprintf("
+### Mean Monthly Returns:
+US Equity (SPY): %.4f%% 
+US Government Bonds (SPTI): %.4f%% 
+
+### Variances and Covariance:
+Variance of US Equity (SPY): %.6f
+Variance of US Government Bonds (SPTI): %.6f
+Covariance between SPY and SPTI: %.6f
+", 
+mean_equity * 100, 
+mean_bond * 100, 
+var_equity, 
+var_bond, 
+cov_equity_bond))
+
+```
+
+### Step 2: Calculate Optimal Weights Using Sharpe Ratio
+Now, we’ll determine the weights for US Equity (SPY) and US Government Bonds (SPTI) that maximize the Sharpe ratio.
+
+```{r}
+# Calculate optimal weights
+w_equity <- (var_bond - cov_equity_bond) / (var_equity + var_bond - 2 * cov_equity_bond)
+w_bond <- 1 - w_equity
+
+# Display all results in one block
+cat(sprintf("
+### Optimal Weights for Maximum Sharpe Ratio:
+Weight in US Equity (SPY): %.2f%%
+Weight in US Government Bonds (SPTI): %.2f%%
+", 
+w_equity * 100, 
+w_bond * 100))
+
+# Data for the pie chart
+weight_allocation <- c(`US Equity (SPY)` = w_equity * 100, `US Government Bonds (SPTI)` = w_bond * 100)
+
+# Create a pie chart for the optimal weights
+pie(weight_allocation,
+    labels = sprintf("%s: %.2f%%", names(weight_allocation), weight_allocation),
+    main = "Optimal Weights Allocation Between US Equity and US Government Bonds",
+    col = c("#66C2A5", "#FC8D62"))  # Custom colors for clarity
+```
+This formula is:
+Derived from the Markowitz two-asset portfolio optimization without considering a risk-free asset.
+It calculates the weight of one asset (Equity) relative to another (Bonds) solely based on the variances and covariance, without adjusting for excess returns or the risk-free rate.
+
+### Step 3: Calculate Sharpe Ratio for the Portfolio
+Next, calculate the expected return and standard deviation of the portfolio and compute the Sharpe ratio.
+
+```{r}
+# Risk-free rate per month
+rf <- 0.0017
+
+# Portfolio return and variance
+portfolio_return <- w_equity * mean_equity + w_bond * mean_bond
+portfolio_variance <- w_equity^2 * var_equity + w_bond^2 * var_bond + 2 * w_equity * w_bond * cov_equity_bond
+portfolio_sd <- sqrt(portfolio_variance)
+
+# Sharpe ratio
+sharpe_ratio <- (portfolio_return - rf) / portfolio_sd
+
+# Display all results in one block
+cat(sprintf("
+### Portfolio Return, Standard Deviation, and Sharpe Ratio:
+Expected Monthly Return of Portfolio: %.4f%%
+Standard Deviation of Portfolio: %.4f%%
+Sharpe Ratio of Portfolio: %.4f
+", 
+portfolio_return * 100, 
+portfolio_sd * 100, 
+sharpe_ratio))
+```
+
+### Step 4: Optimal Capital Allocation Using Quadratic Utility Function
+For an investor with a risk aversion parameter A=10, we’ll calculate the proportion of capital to allocate to the risky portfolio and display it in a pie chart.
+
+```{r}
+# Risk aversion parameter
+A <- 10
+
+# Capital allocation proportion
+y <- (portfolio_return - rf) / (A * portfolio_variance)
+
+# Proportion of risky and risk-free asset
+risk_allocation <- c(Risky_Asset = y, Risk_free_Asset = 1 - y)
+
+# Display all results in one block
+cat(sprintf("
+### Overall Capital Allocation:
+Proportion in Risky Portfolio: %.2f%%
+Proportion in Risk-Free Asset: %.2f%%
+
+### Subdivision of Risky Portfolio:
+Weight in US Equity (SPY) within Risky Portfolio: %.2f%%
+Weight in US Government Bonds (SPTI) within Risky Portfolio: %.2f%%
+
+### Effective Allocation Across All Assets:
+Effective Allocation to US Equity (SPY): %.2f%%
+Effective Allocation to US Government Bonds (SPTI): %.2f%%
+Allocation to Risk-Free Asset: %.2f%%
+",
+y * 100,
+(1 - y) * 100,
+w_equity * 100,
+w_bond * 100,
+w_equity * y * 100,
+w_bond * y * 100,
+(1 - y) * 100))
+
+# Effective allocations
+effective_allocation <- c(
+  `US Equity (SPY)` = w_equity * y * 100,
+  `US Government Bonds (SPTI)` = w_bond * y * 100,
+  `Risk-Free Asset` = (1 - y) * 100
+)
+
+# Data for the chart
+simple_allocation <- c(Risky_Asset = y * 100, Risk_Free_Asset = (1 - y) * 100)
+
+# Create a pie chart with labels for the simplified allocation
+pie(simple_allocation, 
+    labels = sprintf("%s: %.2f%%", names(simple_allocation), simple_allocation),
+    main = "Allocation Between Risky and Risk-Free Assets",
+    col = c("#66C2A5", "#FC8D62"))  # Custom colors for clarity
+
+
+# Create pie chart with labels and percentages
+pie(effective_allocation, 
+    labels = sprintf("%s: %.2f%%", names(effective_allocation), effective_allocation),
+    main = "Effective Allocation Across All Assets",
+    col = c("#66C2A5", "#FC8D62", "#8DA0CB")) # Custom colors for clarity
+```
+
+## Question 2.2: Correlation with New Asset Class (Gold)
+Now, let’s analyze the correlation between the existing asset classes and the new asset class, Gold (IAU), to determine if Gold acts as a diversifier or a hedge.
+
+```{r}
+# Calculate correlation matrix
+cor_matrix <- cor(analysis_data %>% select(Equity_Return, Bond_Return, Gold_Return))
+
+# Display correlation matrix
+cor_matrix
+
+```
+#### Interpretation
+1. Gold vs. Equity (SPY):
+The correlation between Gold (IAU) and Equity (SPY) is 0.1209.
+This is a low positive correlation, suggesting that Gold has a very weak relationship with Equity.
+This low correlation indicates that Gold can serve as a diversifier for Equity, as it doesn't move in tandem with it and thus can help reduce the portfolio's volatility.
+
+2. Gold vs. Bonds (SPTI):
+The correlation between Gold (IAU) and Bonds (SPTI) is 0.3435.
+This is a moderate positive correlation, meaning Gold and Bonds have a somewhat stronger relationship, but it’s still not very high.
+This moderate correlation suggests that while Gold may provide some diversification benefits relative to Bonds, it may not be as strong a diversifier as it is for Equity.
+
+3. Equity vs. Bonds:
+The correlation between Equity (SPY) and Bonds (SPTI) is 0.0290.
+This near-zero correlation suggests that Equity and Bonds are almost completely uncorrelated, making them excellent diversifiers for each other in a portfolio.
+
+#### Conclusion
+- Gold as a Diversifier: Given its low correlation with both Equity and Bonds, Gold can serve as a diversifier in the portfolio. However, it’s more effective as a diversifier for Equity than for Bonds due to the slightly lower correlation.
+- Equity and Bonds Relationship: The near-zero correlation between Equity and Bonds reinforces the traditional view that these two asset classes complement each other well in a diversified portfolio.
+- Adding Gold to a portfolio with Equity and Bonds could improve diversification, especially if the goal is to reduce volatility while maintaining exposure to different asset classes.
+
+## Question 2.3: Add Gold to the Optimal Portfolio
+In this final part, we add Gold to the optimal risky portfolio, treating the initial portfolio from 2.1 as a single asset, and find the new optimal weights and Sharpe ratio.
+
+Steps:
+1. Calculate the expected return, variance, and covariance of the initial risky portfolio with Gold.
+2. Re-optimize to find the new weights that maximize the Sharpe ratio.
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+
+# Step 1: Calculate and Display Characteristics of Gold (IAU)
+mean_gold <- mean(analysis_data$Gold_Return)
+var_gold <- var(analysis_data$Gold_Return)
+sd_gold <- sd(analysis_data$Gold_Return)
+
+# Display all Gold characteristics in one block
+cat(sprintf("
+### Gold (IAU) Characteristics:
+Monthly Average Return: %.4f%%
+Variance: %.6f
+Standard Deviation: %.4f%%
+", 
+mean_gold * 100, 
+var_gold, 
+sd_gold * 100))
+
+# Step 2: Calculate Covariance with Initial Risky Portfolio (Equity + Bonds Combined)
+cov_gold_portfolio <- cov(analysis_data$Gold_Return, 
+                          w_equity * analysis_data$Equity_Return + 
+                          w_bond * analysis_data$Bond_Return)
+
+# Step 3: Define Functions for Expected Return and Variance of the New Portfolio Including Gold
+combined_portfolio_return <- function(w) {
+    w * portfolio_return + (1 - w) * mean_gold
+}
+
+combined_portfolio_variance <- function(w) {
+    w^2 * portfolio_variance + 
+    (1 - w)^2 * var_gold + 
+    2 * w * (1 - w) * cov_gold_portfolio
+}
+
+# Step 4: Maximize Sharpe Ratio to Find Optimal Weights
+opt_sharpe <- optimize(function(w) {
+    (combined_portfolio_return(w) - rf) / sqrt(combined_portfolio_variance(w))
+}, interval = c(0, 1), maximum = TRUE)
+
+# Optimal weights for the initial risky portfolio and Gold
+w_portfolio <- opt_sharpe$maximum
+w_gold <- 1 - w_portfolio
+
+# New Sharpe Ratio for the portfolio including Gold
+new_sharpe_ratio <- (combined_portfolio_return(w_portfolio) - rf) / sqrt(combined_portfolio_variance(w_portfolio))
+
+# Calculate and Display Expected Return of the New Portfolio
+new_portfolio_return <- combined_portfolio_return(w_portfolio)
+
+# Display all results for the optimized portfolio with Gold in one block
+cat(sprintf("
+### Optimized Portfolio Including Gold:
+Optimal Weight in Original Risky Portfolio (Equity + Bonds): %.2f%%
+Optimal Weight in Gold (IAU): %.2f%%
+New Sharpe Ratio of Portfolio with Gold: %.4f
+
+Expected Return of the New Portfolio: %.4f%%
+", 
+w_portfolio * 100, 
+w_gold * 100, 
+new_sharpe_ratio, 
+new_portfolio_return * 100))
+```
+
+1. Characteristics of Gold (IAU): 
+- Gold has a monthly average return of 0.5962%, a variance of 0.002031, and a standard deviation of 4.5067%. These metrics indicate that Gold is relatively volatile but provides a return profile that can enhance diversification.
+2. Optimized Portfolio Allocation: 
+- The addition of Gold to the portfolio results in an optimal allocation of 99.99% to Gold (IAU) and only 0.01% to the initial risky portfolio (US Equity and US Government Bonds). This shows that Gold, due to its diversification properties, is heavily favored when aiming to maximize the Sharpe ratio.
+3. Sharpe Ratio and Expected Return:
+- The new portfolio achieves a Sharpe ratio of 0.0946, an improvement in risk-adjusted performance compared to the portfolio without Gold.
+- The expected monthly return of the new portfolio is 0.5962%, driven by the high allocation to Gold.
+- Comparison with Q1: The optimized portfolio return from Q1 was 0.2067% per month. Adding Gold increases the expected return significantly to 0.5962% per month, indicating that Gold substantially boosts the portfolio's risk-adjusted performance.
+4. Interpretation:
+- Gold provides considerable diversification benefits due to its low correlation with both US Equity and US Government Bonds. This leads to an optimal allocation that is nearly exclusive to Gold when maximizing the Sharpe ratio.
+- However, while this allocation achieves a higher risk-adjusted return, it may not align with all investor preferences, particularly those who seek a more balanced exposure to multiple asset classes. Investors may want to consider the trade-off between improved risk-adjusted returns and diversification across equities and bonds.
+
+In conclusion, adding Gold to the portfolio improves both the Sharpe ratio and the expected return, validating Gold’s role as an effective diversifier. However, the resulting portfolio composition might not suit all risk preferences, as it almost entirely shifts the focus to Gold.
